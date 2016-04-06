@@ -1,0 +1,129 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+
+  "Description": "AWS Lambda timer with <1-minute frequency.",
+
+  "Resources": {
+
+    "TickRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "TickPolicy",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:*"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData",
+                    "cloudwatch:SetAlarmState"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+
+    "TickFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "tick.handler",
+        "Role": { "Fn::GetAtt": [ "TickRole", "Arn" ] },
+        "Code": {
+          "S3Bucket": "1m-tick",
+          "S3Key": "tick.zip"
+        },
+        "Runtime": "python2.7"
+      }
+    },
+
+    "TickTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": { "Fn::GetAtt" : [ "TickFunction", "Arn" ] },
+            "Protocol": "lambda"
+          }
+        ]
+      }
+    },
+
+    "TickPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName" : { "Fn::GetAtt" : [ "TickFunction", "Arn" ] },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": { "Ref" : "TickTopic" }
+      }
+    },
+
+    "TickState0": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "TickState0",
+        "Namespace": "Tick",
+        "MetricName": "Tick",
+        "Statistic": "Average",
+        "EvaluationPeriods": 1,
+        "Period": 60,
+        "Threshold": 0,
+        "ComparisonOperator": "LessThanOrEqualToThreshold",
+        "AlarmActions": [ { "Ref": "TickTopic" } ]
+      }
+    },
+
+    "TickState1": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "TickState1",
+        "Namespace": "Tick",
+        "MetricName": "Tick",
+        "Statistic": "Average",
+        "EvaluationPeriods": 1,
+        "Period": 60,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "AlarmActions": [ { "Ref": "TickTopic" } ]
+      }
+    },
+
+    "StartTick": {
+      "Type": "Custom::StartTick",
+      "DependsOn": [ "TickState0", "TickState1" ],
+      "Properties": {
+        "ServiceToken": { "Ref" : "TickTopic" }
+      }
+    }
+
+  }
+
+}
