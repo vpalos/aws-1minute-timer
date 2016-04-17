@@ -60,7 +60,8 @@
           "S3Bucket": "1m-tick",
           "S3Key": "tick.zip"
         },
-        "Runtime": "python2.7"
+        "Runtime": "python2.7",
+        "Timeout": 30
       }
     },
 
